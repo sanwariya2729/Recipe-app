@@ -19,9 +19,9 @@ using namespace sql;
 
 
 
-const char* username="admin";
-const char* password="MYrecipe123";
-const char* endpoint="tcp://recipe-db.ch66yyc8q7e9.eu-north-1.rds.amazonaws.com";
+const char* username="root";
+const char* password="1234";
+const char* endpoint="tcp://127.0.0.1:3306";
 
 
 Connection* connect_database(){
@@ -60,6 +60,7 @@ RecipeApp::RecipeApp(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(1000, 800)) {
 	conn=connect_database();
     wxPanel* panel = new wxPanel(this);
+    
     wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
     wxBoxSizer* searchSizer = new wxBoxSizer(wxHORIZONTAL);
     wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -72,17 +73,22 @@ RecipeApp::RecipeApp(const wxString& title)
 
     searchCtrl = new wxTextCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
 
-    searchSizer->Add(actionChoice, 0, wxALL, 5);
-    searchSizer->Add(searchCtrl, 1, wxEXPAND | wxALL, 5);
+    searchSizer->Add(actionChoice, 0, wxALL, 10);
+    searchSizer->Add(searchCtrl, 1, wxEXPAND | wxALL, 10);
     topSizer->Add(searchSizer, 0, wxEXPAND);
 
     recipeList = new wxListBox(panel, wxID_ANY);
     recipeDetail = new wxTextCtrl(panel, wxID_ANY, wxEmptyString,
                                   wxDefaultPosition, wxDefaultSize,
                                   wxTE_MULTILINE | wxTE_READONLY);
-
-    mainSizer->Add(recipeList, 1, wxEXPAND | wxALL, 5);
-    mainSizer->Add(recipeDetail, 2, wxEXPAND | wxALL, 5);
+	
+	wxFont listFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+	wxFont detailFont(15, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+	recipeList->SetFont(listFont);
+	recipeDetail->SetFont(detailFont);
+	
+    mainSizer->Add(recipeList, 2, wxEXPAND | wxALL, 5);
+    mainSizer->Add(recipeDetail, 3, wxEXPAND | wxALL, 5);
 
     topSizer->Add(mainSizer, 1, wxEXPAND);
     panel->SetSizer(topSizer);
@@ -96,21 +102,32 @@ void RecipeApp::OnSearch(wxCommandEvent& event) {
     wxString term = searchCtrl->GetValue();
     vector<string> params;
     if (!term.IsEmpty()) params.push_back(term.ToStdString());
-	
 
-    vector<pair<string, string>> results = runRecipeQuery(conn,action.ToStdString(), params);
+    vector<pair<string, string>> results = runRecipeQuery(conn, action.ToStdString(), params);
     recipeList->Clear();
+
     for (const auto& r : results) {
         recipeList->Append(wxString::Format("%s - %s", r.first, r.second));
     }
 }
 
+
 void RecipeApp::OnRecipeSelect(wxCommandEvent& event) {
     wxString selected = recipeList->GetStringSelection();
-    wxString nameOnly = selected.BeforeFirst('-').Trim();
-    string detail = fetchRecipeDetail(conn,nameOnly.ToStdString());
+
+    
+    int sepIndex = selected.Find(" - ");
+    wxString titleOnly = (sepIndex != wxNOT_FOUND) ? selected.Left(sepIndex).Trim() : selected.Trim();
+
+    std::string recipeTitle = titleOnly.ToStdString();
+    std::cout << "Fetching details for: " << recipeTitle << std::endl;
+
+    string detail = fetchRecipeDetail(conn, recipeTitle);
     recipeDetail->SetValue(detail);
 }
+
+
+
 
 class MyApp : public wxApp {
 public:

@@ -12,13 +12,14 @@ using namespace sql;
 unordered_map<string, string> queryMap = {
     {"mealtype", "SELECT title, description FROM recipes WHERE meal_type = ?"},
     {"allrecipes","select title,description from recipes"},
-    {"calorie", "SELECT title, description FROM recipes WHERE total_calories <= ?"},
-    {"ingredient", "SELECT r.title, r.description FROM recipes r JOIN recipe_ingredients ri ON r.recipe_id = ri.recipe_id JOIN ingredients i ON ri.ingredient_id = i.ingredient_id WHERE i.name = ?"},
+    {"calorie <", "SELECT title, description FROM recipes WHERE total_calories <= ?"},
+    {"calorie >", "SELECT title, description FROM recipes WHERE total_calories >= ?"},
+    {"ingredient", "SELECT r.title, r.description FROM recipes r JOIN recipe_ingredients ri ON r.recipe_id = ri.recipe_id JOIN ingredients i ON ri.ingredient_id = i.ingredient_id WHERE lower(i.name) like lower(concat('%',?,'%')) "},
     {"reviews", "SELECT r.title, r.description FROM recipes r JOIN reviews rs ON r.recipe_id = rs.recipe_id ORDER BY rs.rating DESC"},
     {"favorites", "SELECT r.title, r.description FROM favorites f JOIN recipes r ON f.recipe_id = r.recipe_id WHERE f.user_id = ?"},
-    {"tags", "SELECT r.title, r.description FROM recipes r JOIN recipe_tags rt ON r.recipe_id = rt.recipe_id JOIN tags t ON rt.tag_id = t.tag_id WHERE t.tag_name = ?"},
-    {"user", "SELECT r.title, r.description FROM recipes r JOIN users u ON r.user_id = u.user_id WHERE u.user_name = ?"},
-    {"searchrecipe", "SELECT title, description FROM recipes WHERE LOWER(title) LIKE LOWER(CONCAT('%', ?, '%'))"}
+    {"tags", "SELECT r.title, r.description FROM recipes r JOIN recipe_tags rt ON r.recipe_id = rt.recipe_id JOIN tags t ON rt.tag_id = t.tag_id WHERE lower(t.name) like lower(concat('%',?,'%'))"},
+    {"user", "SELECT r.title, r.description FROM recipes r JOIN users u ON r.user_id = u.user_id WHERE u.username = ?"},
+    {"searchrecipe", "SELECT title, description FROM recipes WHERE LOWER(title) LIKE LOWER(CONCAT('%', ?, '%'))"},
 
 };
 
@@ -66,29 +67,27 @@ vector<pair<string, string>> runRecipeQuery(Connection* dbConn,const string& act
 string fetchRecipeDetail(Connection* dbConn, const string& recipeName) {
     string detail;
     try {
-        // Step 1: Get recipe info and ID
-        shared_ptr<PreparedStatement> recipeStmt(dbConn->prepareStatement(
-            "SELECT recipe_id, title, meal_type, total_calories, description FROM recipes WHERE title = ?"
+        // Fetch general recipe details
+        shared_ptr<PreparedStatement> pstmt(dbConn->prepareStatement(
+            "SELECT * FROM recipes WHERE title = ?"
         ));
-        recipeStmt->setString(1, recipeName);
-        shared_ptr<ResultSet> recipeRes(recipeStmt->executeQuery());
+        pstmt->setString(1, recipeName);
+        shared_ptr<ResultSet> res(pstmt->executeQuery());
 
-        int recipeId = -1;
-        if (recipeRes->next()) {
-            recipeId = recipeRes->getInt("recipe_id");
-            detail += "Name: " + recipeRes->getString("title") + "\n";
-            detail += "Meal Type: " + recipeRes->getString("meal_type") + "\n";
-            detail += "Calories: " + to_string(recipeRes->getInt("total_calories")) + "\n";
-            detail += "Description: " + recipeRes->getString("description") + "\n";
-        } else {
-            return "Recipe not found.\n";
+        if (res->next()) {
+            detail += "Name: " + res->getString("title") + "\n";
+            detail += "Meal Type: " + res->getString("meal_type") + "\n";
+            detail += "Calories: " + to_string(res->getInt("total_calories")) + "\n";
+            detail += "Description: " + res->getString("description") + "\n";
         }
 
-        // Step 2: Get steps using recipe_id
+        
         shared_ptr<PreparedStatement> stepStmt(dbConn->prepareStatement(
-            "SELECT step_number, instruction FROM steps WHERE recipe_id = ? ORDER BY step_number ASC"
+            "SELECT s.step_number, s.instruction FROM steps s "
+            "JOIN recipes r ON s.recipe_id = r.recipe_id "
+            "WHERE r.title = ? ORDER BY s.step_number"
         ));
-        stepStmt->setInt(1, recipeId);
+        stepStmt->setString(1, recipeName);
         shared_ptr<ResultSet> stepsRes(stepStmt->executeQuery());
 
         detail += "\nSteps:\n";
@@ -98,7 +97,6 @@ string fetchRecipeDetail(Connection* dbConn, const string& recipeName) {
 
     } catch (SQLException& e) {
         cerr << "Detail Fetch Error: " << e.what() << endl;
-        detail = "Error fetching recipe details.\n";
     }
 
     return detail;
