@@ -12,7 +12,6 @@
 #include <vector>
 #include <string>
 #include "fetch_data.h"
-//#include "login.h"
 
 using namespace std;
 using namespace sql;
@@ -41,24 +40,68 @@ Connection* connect_database(){
 
 
 
+class LoginDialog : public wxDialog {
+public:
+    wxTextCtrl* usernameCtrl;
+    wxTextCtrl* passwordCtrl;
+    wxTextCtrl* emailCtrl;
+    wxString username;
+    
+
+    LoginDialog(wxWindow* parent)
+        : wxDialog(parent, wxID_ANY, "Login", wxDefaultPosition, wxSize(600, 400)) {
+
+        wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+
+        usernameCtrl = new wxTextCtrl(this, wxID_ANY);
+        passwordCtrl = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
+        emailCtrl = new wxTextCtrl(this,wxID_ANY);
+
+        sizer->Add(new wxStaticText(this, wxID_ANY, "Username:"), 0, wxALL, 5);
+        sizer->Add(usernameCtrl, 0, wxEXPAND | wxALL, 5);
+        sizer->Add(new wxStaticText(this, wxID_ANY, "Password:"), 0, wxALL, 5);
+        sizer->Add(passwordCtrl, 0, wxEXPAND | wxALL, 5);
+        sizer->Add(new wxStaticText(this, wxID_ANY, "email:"), 0, wxALL, 5);
+        sizer->Add(emailCtrl, 0, wxEXPAND | wxALL, 5);
+
+        wxButton* loginButton = new wxButton(this, wxID_OK, "Login");
+        sizer->Add(loginButton, 0, wxALIGN_CENTER | wxALL, 10);
+
+        SetSizer(sizer);
+    }
+
+    wxString GetUsername() const {
+        return usernameCtrl->GetValue();
+    }
+
+    wxString GetPassword() const {
+        return passwordCtrl->GetValue();
+    }
+    wxString Getemail() const {
+        return emailCtrl->GetValue();
+    }
+};
+
+
+
 class RecipeApp : public wxFrame {
 public:
-    RecipeApp(const wxString& title);
+    RecipeApp(const wxString& title,shared_ptr<Connection> conn,int user_id);
 
 private:
     wxTextCtrl* searchCtrl;
     wxChoice* actionChoice;
     wxListBox* recipeList;
     wxTextCtrl* recipeDetail;
-    Connection* conn;
+    shared_ptr<Connection> conn;
+    int user_id;
 
     void OnSearch(wxCommandEvent& event);
     void OnRecipeSelect(wxCommandEvent& event);
 };
 
-RecipeApp::RecipeApp(const wxString& title)
-    : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(1000, 800)) {
-	conn=connect_database();
+RecipeApp::RecipeApp(const wxString& title,shared_ptr<Connection> conn,int user_id)
+    : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(1000, 800)),conn(conn),user_id(user_id) {
     wxPanel* panel = new wxPanel(this);
     
     wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
@@ -126,6 +169,27 @@ void RecipeApp::OnRecipeSelect(wxCommandEvent& event) {
     recipeDetail->SetValue(detail);
 }
 
+int getUserId(const std::string& username,shared_ptr<Connection> conn) {
+    try {
+        sql::PreparedStatement* pstmt = conn->prepareStatement(
+            "SELECT user_id FROM users WHERE username = ?"
+        );
+        pstmt->setString(1, username);
+        sql::ResultSet* res = pstmt->executeQuery();
+
+        int uid = -1;
+        if (res->next()) {
+            uid = res->getInt("user_id");
+        }
+
+        delete res;
+        delete pstmt;
+        return uid;
+    } catch (sql::SQLException& e) {
+        std::cerr << "SQL error in getUserId: " << e.what() << std::endl;
+        return -1;
+    }
+}
 
 
 
@@ -135,12 +199,39 @@ public:
 };
 
 bool MyApp::OnInit() {
-    
-    
+	shared_ptr<Connection> conn(connect_database());
 
-    RecipeApp* frame = new RecipeApp("Recipe Manager");
-    frame->Show(true);
-    return true;
+    LoginDialog loginDialog(nullptr);
+    if (loginDialog.ShowModal() == wxID_OK) {
+        wxString username = loginDialog.GetUsername();
+        wxString password = loginDialog.GetPassword();
+        wxString email = loginDialog.Getemail();
+
+        std::string uname = username.ToStdString();
+        std::string pword = password.ToStdString();
+        std::string emal = email.ToStdString();
+
+        if (validateUser(conn,uname, pword)) {
+            int userId = getUserId(uname,conn);
+            RecipeApp* mainWin = new RecipeApp("Recipe App",conn, userId);
+            mainWin->Show(true);
+            return true;
+        } else {
+            int answer = wxMessageBox("User not found. Create new user?", "Create Account", wxYES_NO | wxICON_QUESTION);
+            if (answer == wxYES) {
+                if ((!uname.empty() && !pword.empty() ) && createUser(conn,uname, pword,emal)) {
+                    wxMessageBox("User created successfully!", "Success", wxOK | wxICON_INFORMATION);
+                    int userId = getUserId(uname,conn); 
+                    RecipeApp* mainWin = new RecipeApp("Recipe App",conn, userId);
+                    mainWin->Show(true);
+                    return true;
+                } else {
+                    wxMessageBox("Failed to create user.", "Error", wxOK | wxICON_ERROR);
+                }
+            }
+        }
+    }
+    return false;
 }
 
 wxIMPLEMENT_APP(MyApp);

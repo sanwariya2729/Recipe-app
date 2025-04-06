@@ -8,24 +8,15 @@ using namespace std;
 using namespace sql;
 
 
-bool authenticate_user(shared_ptr<Connection> conn,int& user_id){
-	string username;
-	string passwd;
-	
-	cout<<"Enter username:";
-	cin>>username;
-	cout<<"Enter password:";
-	cin>>passwd;
-	
+bool validateUser(shared_ptr<Connection> conn,string username, string passwd){
 	try{
-		unique_ptr<PreparedStatement> pst(conn->prepareStatement(" select * from users where user_name= ? and password=?"));
+		unique_ptr<PreparedStatement> pst(conn->prepareStatement(" select * from users where username= ? and password=?"));
 		pst->setString(1,username);
 		pst->setString(2, passwd);
 		
 		unique_ptr<ResultSet> res(pst->executeQuery());
 		if(res->next()){
-			cout<<"login successful. welcome "<<res->getString("user_name")<<"!!\n";
-			user_id=res->getInt("user_id");
+			cout<<"login successful. welcome "<<res->getString("username")<<"!!\n";
 			return true;
 		}
 		else{
@@ -41,26 +32,19 @@ bool authenticate_user(shared_ptr<Connection> conn,int& user_id){
 }
 
 
-void register_user(shared_ptr<Connection> conn){
-	string user_name;
-	string passwd;
-	string email;
-	cout<<"Enter username(less than 25 characters):"; cin>>user_name;
-	cout<<"Enter email(less than 50 characters):"; cin >> email;
-	cout<<"Enter password:"; cin>> passwd;
-	
-	
+bool createUser(shared_ptr<Connection> conn,string username,string passwd,string email){
 	try{
-		unique_ptr<PreparedStatement> pst(conn->prepareStatement("insert into users (user_name,email,password) values (?,?,?)"));
-		pst->setString(1,user_name);
+		unique_ptr<PreparedStatement> pst(conn->prepareStatement("insert into users (username,email,password) values (?,?,?)"));
+		pst->setString(1,username);
 		pst->setString(2,email);
 		pst->setString(3,passwd);
 		
 		pst->executeUpdate();
 		cout<<"user created successfully!!"<<endl;
-	
+		return true;
 	}catch(SQLException& e){
 		cerr<<"ERROR:"<<e.what()<<endl;
+		exit(1);
 	}
 }
 

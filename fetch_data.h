@@ -23,7 +23,7 @@ unordered_map<string, string> queryMap = {
 
 };
 
-vector<pair<string, string>> runRecipeQuery(Connection* dbConn,const string& action, const vector<string>& params = {}) {
+vector<pair<string, string>> runRecipeQuery(shared_ptr<Connection> dbConn,const string& action, const vector<string>& params = {}) {
     vector<pair<string, string>> results;
     try {
         auto it = queryMap.find(action);
@@ -64,10 +64,9 @@ vector<pair<string, string>> runRecipeQuery(Connection* dbConn,const string& act
     return results;
 }
 
-string fetchRecipeDetail(Connection* dbConn, const string& recipeName) {
+string fetchRecipeDetail(shared_ptr<Connection> dbConn, const string& recipeName) {
     string detail;
     try {
-        // Fetch general recipe details
         shared_ptr<PreparedStatement> pstmt(dbConn->prepareStatement(
             "SELECT * FROM recipes WHERE title = ?"
         ));
