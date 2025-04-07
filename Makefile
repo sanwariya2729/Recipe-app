@@ -5,7 +5,7 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -Wno-deprecated-copy $(WX_FLAGS) -I/usr/
 
 LDFLAGS = $(WX_FLAGS) $(MYSQL_FLAGS)
 
-SRC = App.cpp
+SRC = App.cpp 
 OBJ = $(SRC:.cpp=.o)
 TARGET = recipeapp
 

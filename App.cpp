@@ -12,6 +12,7 @@
 #include <vector>
 #include <string>
 #include "fetch_data.h"
+#include "add_recipe.h"
 
 using namespace std;
 using namespace sql;
@@ -123,7 +124,7 @@ private:
 
     void OnSearch(wxCommandEvent& event);
     void OnRecipeSelect(wxCommandEvent& event);
-    //void OnAddRecipe(wxCommandEvent& event);
+    void OnAddRecipe(wxCommandEvent& event);
 	void OnAddFavorite(wxCommandEvent& event);
 	void OnAddReview(wxCommandEvent& event);
 	int getRecipeIdByTitle(const std::string& title);
@@ -179,55 +180,11 @@ RecipeApp::RecipeApp(const wxString& title,shared_ptr<Connection> conn_,int user
 
     searchCtrl->Bind(wxEVT_TEXT_ENTER, &RecipeApp::OnSearch, this);
     recipeList->Bind(wxEVT_LISTBOX, &RecipeApp::OnRecipeSelect, this);
-    //addRecipeBtn->Bind(wxEVT_BUTTON, &RecipeApp::OnAddRecipe, this);
+    addRecipeBtn->Bind(wxEVT_BUTTON, &RecipeApp::OnAddRecipe, this);
 	addFavoriteBtn->Bind(wxEVT_BUTTON, &RecipeApp::OnAddFavorite, this);
 	addReviewBtn->Bind(wxEVT_BUTTON, &RecipeApp::OnAddReview, this);
 
 }
-
-//helper function
-int RecipeApp::getRecipeIdByTitle(const std::string& title) {
-    shared_ptr<sql::PreparedStatement> stmt(conn->prepareStatement(
-        "SELECT recipe_id FROM recipes WHERE title = ?"
-    ));
-    stmt->setString(1, title);
-    shared_ptr<sql::ResultSet> res(stmt->executeQuery());
-
-    if (res->next()) {
-        return res->getInt("recipe_id");
-    }
-    return -1; // Not found
-}
-void RecipeApp::OnSearch(wxCommandEvent& event) {
-    wxString action = actionChoice->GetStringSelection();
-    wxString term = searchCtrl->GetValue();
-    vector<string> params;
-    if (!term.IsEmpty()) params.push_back(term.ToStdString());
-
-    vector<pair<string, string>> results = runRecipeQuery(conn, action.ToStdString(), params);
-    recipeList->Clear();
-
-    for (const auto& r : results) {
-        recipeList->Append(wxString::Format("%s - %s", r.first, r.second));
-    }
-}
-
-
-void RecipeApp::OnRecipeSelect(wxCommandEvent& event) {
-    wxString selected = recipeList->GetStringSelection();
-
-    
-    int sepIndex = selected.Find(" - ");
-    wxString titleOnly = (sepIndex != wxNOT_FOUND) ? selected.Left(sepIndex).Trim() : selected.Trim();
-
-    std::string recipeTitle = titleOnly.ToStdString();
-    std::cout << "Fetching details for: " << recipeTitle << std::endl;
-
-    string detail = fetchRecipeDetail(conn, recipeTitle);
-    recipeDetail->SetValue(detail);
-}
-
-
 
 
 void RecipeApp::OnAddFavorite(wxCommandEvent& event) {
@@ -238,7 +195,7 @@ void RecipeApp::OnAddFavorite(wxCommandEvent& event) {
     }
 
     wxString title = selected.BeforeFirst('-').Trim();
-    int recipeId = getRecipeIdByTitle(title.ToStdString()); // Implement this helper
+    int recipeId = getRecipeIdByTitle(title.ToStdString()); 
 
     try {
         shared_ptr<sql::PreparedStatement> stmt(conn->prepareStatement(
@@ -287,6 +244,145 @@ void RecipeApp::OnAddReview(wxCommandEvent& event) {
         wxMessageBox("Failed to submit review.", "Error");
     }
 }
+
+
+
+
+int insertRecipe(shared_ptr<sql::Connection> conn, int user_id, const string& title, const string& description) {
+    try {
+        string query = "INSERT INTO recipes (user_id, title, description) VALUES (?, ?, ?)";
+        shared_ptr<sql::PreparedStatement> stmt(conn->prepareStatement(query));
+        stmt->setInt(1, user_id);
+        stmt->setString(2, title);
+        stmt->setString(3, description);
+        stmt->execute();
+
+
+        shared_ptr<sql::Statement> stmt2(conn->createStatement());
+        shared_ptr<sql::ResultSet> res(stmt2->executeQuery("SELECT LAST_INSERT_ID()"));
+        if (res->next()) {
+            return res->getInt(1);
+        }
+    } catch (sql::SQLException& e) {
+        cerr << "Error inserting recipe: " << e.what() << endl;
+    }
+    return -1;
+}
+void insertIngredient(shared_ptr<sql::Connection> conn, int recipe_id, const string& ingredient_name) {
+    try {
+
+        string query = "INSERT IGNORE INTO ingredients (name) VALUES (?)";
+        shared_ptr<sql::PreparedStatement> stmt1(conn->prepareStatement(query));
+        stmt1->setString(1, ingredient_name);
+        stmt1->execute();
+
+
+        query = "SELECT ingredient_id FROM ingredients WHERE name = ?";
+        shared_ptr<sql::PreparedStatement> stmt2(conn->prepareStatement(query));
+        stmt2->setString(1, ingredient_name);
+        shared_ptr<sql::ResultSet> res(stmt2->executeQuery());
+
+        int ingredient_id = -1;
+        if (res->next()) {
+            ingredient_id = res->getInt("ingredient_id");
+        }
+
+        
+        if (ingredient_id != -1) {
+            string insertRecipeIng = "INSERT INTO recipe_ingredients (recipe_id, ingredient_id) VALUES (?, ?)";
+            shared_ptr<sql::PreparedStatement> stmt3(conn->prepareStatement(insertRecipeIng));
+            stmt3->setInt(1, recipe_id);
+            stmt3->setInt(2, ingredient_id);
+            stmt3->execute();
+        }
+    } catch (sql::SQLException& e) {
+        cerr << "Error inserting ingredient: " << e.what() << endl;
+    }
+}
+void insertStep(shared_ptr<sql::Connection> conn, int recipe_id, int step_number, const string& instruction) {
+    try {
+        string query = "INSERT INTO steps (recipe_id, step_number, instruction) VALUES (?, ?, ?)";
+        shared_ptr<sql::PreparedStatement> stmt(conn->prepareStatement(query));
+        stmt->setInt(1, recipe_id);
+        stmt->setInt(2, step_number);
+        stmt->setString(3, instruction);
+        stmt->execute();
+    } catch (sql::SQLException& e) {
+        cerr << "Error inserting step: " << e.what() << endl;
+    }
+}
+
+
+
+void RecipeApp::OnAddRecipe(wxCommandEvent& event) {
+    
+    AddRecipeDialog dlg(this);
+    if (dlg.ShowModal() == wxID_OK) {
+        std::string title = dlg.GetTitle().ToStdString();
+        std::string description = dlg.GetDescription().ToStdString();
+        auto ingredients = dlg.GetIngredients();
+        auto steps = dlg.GetSteps();
+
+        int recipe_id = insertRecipe(conn, user_id, title, description);
+
+        for (const auto& ing : ingredients) {
+            insertIngredient(conn, recipe_id, ing.ToStdString());
+        }
+
+        int stepNum = 1;
+        for (const auto& step : steps) {
+            insertStep(conn, recipe_id, stepNum++, step.ToStdString());
+        }
+
+        wxMessageBox("Recipe added successfully!", "Success", wxOK | wxICON_INFORMATION);
+    }
+}
+
+
+//helper function
+int RecipeApp::getRecipeIdByTitle(const std::string& title) {
+    shared_ptr<sql::PreparedStatement> stmt(conn->prepareStatement(
+        "SELECT recipe_id FROM recipes WHERE title = ?"
+    ));
+    stmt->setString(1, title);
+    shared_ptr<sql::ResultSet> res(stmt->executeQuery());
+
+    if (res->next()) {
+        return res->getInt("recipe_id");
+    }
+    return -1; // Not found
+}
+void RecipeApp::OnSearch(wxCommandEvent& event) {
+    wxString action = actionChoice->GetStringSelection();
+    wxString term = searchCtrl->GetValue();
+    vector<string> params;
+    if (!term.IsEmpty()) params.push_back(term.ToStdString());
+
+    vector<pair<string, string>> results = runRecipeQuery(conn, action.ToStdString(), params);
+    recipeList->Clear();
+
+    for (const auto& r : results) {
+        recipeList->Append(wxString::Format("%s - %s", r.first, r.second));
+    }
+}
+
+
+void RecipeApp::OnRecipeSelect(wxCommandEvent& event) {
+    wxString selected = recipeList->GetStringSelection();
+
+    
+    int sepIndex = selected.Find(" - ");
+    wxString titleOnly = (sepIndex != wxNOT_FOUND) ? selected.Left(sepIndex).Trim() : selected.Trim();
+
+    std::string recipeTitle = titleOnly.ToStdString();
+    std::cout << "Fetching details for: " << recipeTitle << std::endl;
+
+    string detail = fetchRecipeDetail(conn, recipeTitle);
+    recipeDetail->SetValue(detail);
+}
+
+
+
 
 
 
