@@ -18,7 +18,7 @@ unordered_map<string, string> queryMap = {
     {"reviews", "SELECT r.title, r.description FROM recipes r JOIN reviews rs ON r.recipe_id = rs.recipe_id ORDER BY rs.rating DESC"},
     {"favorites", "SELECT r.title, r.description FROM favorites f JOIN recipes r ON f.recipe_id = r.recipe_id WHERE f.user_id = ?"},
     {"tags", "SELECT r.title, r.description FROM recipes r JOIN recipe_tags rt ON r.recipe_id = rt.recipe_id JOIN tags t ON rt.tag_id = t.tag_id WHERE lower(t.name) like lower(concat('%',?,'%'))"},
-    {"user", "SELECT r.title, r.description FROM recipes r JOIN users u ON r.user_id = u.user_id WHERE u.username = ?"},
+    {"user", "SELECT r.title, r.description FROM recipes r JOIN users u ON r.user_id = u.user_id WHERE lower(u.username) like lower(concat('%',?,'%')) "},
     {"searchrecipe", "SELECT title, description FROM recipes WHERE LOWER(title) LIKE LOWER(CONCAT('%', ?, '%'))"},
 
 };
