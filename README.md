@@ -1,7 +1,7 @@
 # RECIPE DATABASE
 
 ## Description
-	-It is a recipe database where you can establish connection to a remote database.
+	-It is a recipe manager where you can establish connection to a remote database.
 	-It is used C++ to connect to the the database and has a basic UI which was implemented using wxWidegets library
 	-Using this we can fetch information through various methods such as name of the recipe, favourites , reviews etc 
 	
@@ -11,8 +11,11 @@
 		-if you have a new reipe, you can add it to the database or you give give review to any existing recipes
 		-you can also mark them as favourite and can review them later.
 
-## To compile run:-
-	make clean && make
+## To compile, run:-
+	-make clean && make
+
+## To run:-
+	./recipeapp
 	
 ## Technologies
 
@@ -24,8 +27,9 @@ Install the required packages:-
 
 
 ```bash
-sudo apt install libwxgtk3.2-dev libmysqlcppconn-dev mysql-server
-g++ App.cpp -o recipe_app `wx-config --cxxflags --libs` -lmysqlcppconn
+sudo apt install libwxgtk3.2-dev 
+sudo apt install libmysqlcppconn-dev
+sudo apt install mysql-server
 
 
 	
