@@ -16,6 +16,12 @@
 
 ## To run:-
 	./recipeapp
+
+## Disclamer:-
+	Unfourtunately I didn't use a Cloud platform to host the database so
+	the code needs an existing database to run with the same schema that was used to create this app.
+	you'll have to provide the database name,hostname,password of your database server in App.cpp file :)
+
 	
 ## Technologies
 

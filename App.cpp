@@ -18,10 +18,16 @@ using namespace std;
 using namespace sql;
 
 
+/* 
+	this is run on my local database server having the exsing database
+	 so run on a server with existing database.
+	
+*/
 
-const char* username="root";
-const char* password="1234";
-const char* endpoint="tcp://127.0.0.1:3306";
+
+const char* username="your_username";
+const char* password="your_password";
+const char* endpoint="your_mysql_server_endpoint";
 
 
 Connection* connect_database(){
